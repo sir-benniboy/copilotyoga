@@ -1,0 +1,499 @@
+{
+  "name": "d76105e3-0640-51cb-a920-a3db232805db",
+  "id": "/providers/Microsoft.Flow/flows/d76105e3-0640-51cb-a920-a3db232805db",
+  "type": "Microsoft.Flow/flows",
+  "properties": {
+    "apiId": "/providers/Microsoft.PowerApps/apis/shared_logicflows",
+    "displayName": "Copilot-Znüni",
+    "definition": {
+      "metadata": {
+        "provisioningMethod": "FromDefinition",
+        "failureAlertSubscription": true
+      },
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        },
+        "$connections": {
+          "defaultValue": {},
+          "type": "Object"
+        }
+      },
+      "triggers": {
+        "Wochentags_um_0845": {
+          "type": "Recurrence",
+          "recurrence": {
+            "frequency": "Week",
+            "interval": 1,
+            "timeZone": "W. Europe Standard Time",
+            "startTime": "2026-01-05T00:00:00Z",
+            "schedule": {
+              "weekDays": [
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday"
+              ],
+              "hours": [
+                "8"
+              ],
+              "minutes": [
+                45
+              ]
+            }
+          }
+        }
+      },
+      "actions": {
+        "Ausfuehren": {
+          "runAfter": {},
+          "type": "Scope",
+          "actions": {
+            "Einstellungen_lesen": {
+              "runAfter": {},
+              "type": "OpenApiConnection",
+              "inputs": {
+                "parameters": {
+                  "source": "me",
+                  "drive": "",
+                  "file": "",
+                  "table": "tblEinstellungen",
+                  "idColumn": "Id",
+                  "id": "1"
+                },
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_excelonlinebusiness",
+                  "connectionName": "shared_excelonlinebusiness",
+                  "operationId": "GetItem"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Pausiert_pruefen": {
+              "runAfter": {
+                "Einstellungen_lesen": [
+                  "Succeeded"
+                ]
+              },
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "equals": [
+                      "@toLower(trim(coalesce(body('Einstellungen_lesen')?['Pausiert'],'')))",
+                      "ja"
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Beenden_weil_pausiert": {
+                  "runAfter": {},
+                  "type": "Terminate",
+                  "inputs": {
+                    "runStatus": "Succeeded"
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              }
+            },
+            "Offene_Tipps_lesen": {
+              "runAfter": {
+                "Pausiert_pruefen": [
+                  "Succeeded"
+                ]
+              },
+              "type": "OpenApiConnection",
+              "inputs": {
+                "parameters": {
+                  "source": "me",
+                  "drive": "",
+                  "file": "",
+                  "table": "tblTipps",
+                  "$filter": "Status eq 'Offen'",
+                  "$top": 500
+                },
+                "host": {
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_excelonlinebusiness",
+                  "connectionName": "shared_excelonlinebusiness",
+                  "operationId": "GetItems"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Passende_Tipps_filtern": {
+              "runAfter": {
+                "Offene_Tipps_lesen": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Query",
+              "inputs": {
+                "from": "@body('Offene_Tipps_lesen')?['value']",
+                "where": "@or(not(equals(toLower(trim(coalesce(body('Einstellungen_lesen')?['NurChatTipps'],''))),'ja')),equals(toLower(trim(coalesce(item()?['Lizenz'],''))),'chat'))"
+              }
+            },
+            "Tipp_vorhanden": {
+              "runAfter": {
+                "Passende_Tipps_filtern": [
+                  "Succeeded"
+                ]
+              },
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "greater": [
+                      "@length(body('Passende_Tipps_filtern'))",
+                      0
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Tipp": {
+                  "runAfter": {},
+                  "type": "Compose",
+                  "inputs": "@first(body('Passende_Tipps_filtern'))"
+                },
+                "Praefix": {
+                  "runAfter": {
+                    "Tipp": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Compose",
+                  "inputs": "@if(empty(trim(coalesce(body('Einstellungen_lesen')?['Betreffpraefix'],''))),'Copilot-Znüni',trim(coalesce(body('Einstellungen_lesen')?['Betreffpraefix'],'')))"
+                },
+                "Anleitung_Block": {
+                  "runAfter": {
+                    "Praefix": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Compose",
+                  "inputs": "@if(empty(trim(coalesce(outputs('Tipp')?['Anleitung'],''))),'',concat('<tr><td style=\"padding:12px 28px 0 28px;\"><p style=\"margin:0 0 6px 0;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;color:#0f4c5c;\">So geht&#39;s</p><ol style=\"margin:0;padding-left:20px;font-size:15px;line-height:1.55;\"><li style=\"margin-bottom:4px;\">',replace(replace(trim(coalesce(outputs('Tipp')?['Anleitung'],'')),decodeUriComponent('%0D'),''),decodeUriComponent('%0A'),'</li><li style=\"margin-bottom:4px;\">'),'</li></ol></td></tr>'))"
+                },
+                "Prompt_Block": {
+                  "runAfter": {
+                    "Anleitung_Block": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Compose",
+                  "inputs": "@if(empty(trim(coalesce(outputs('Tipp')?['Prompt'],''))),'',concat('<tr><td style=\"padding:16px 28px 0 28px;\"><p style=\"margin:0 0 6px 0;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;color:#0f4c5c;\">Prompt zum Kopieren</p><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td bgcolor=\"#f6f8fa\" style=\"background-color:#f6f8fa;border-left:4px solid #2a9d8f;padding:12px 14px;font-family:Consolas,Courier New,monospace;font-size:14px;line-height:1.5;color:#1b1b1b;\">',replace(replace(trim(coalesce(outputs('Tipp')?['Prompt'],'')),decodeUriComponent('%0D'),''),decodeUriComponent('%0A'),'<br>'),'</td></tr></table></td></tr>'))"
+                },
+                "Tipp_Block": {
+                  "runAfter": {
+                    "Prompt_Block": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Compose",
+                  "inputs": "@if(empty(trim(coalesce(outputs('Tipp')?['Tipp'],''))),'',concat('<tr><td style=\"padding:16px 28px 0 28px;\"><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\"><tr><td bgcolor=\"#fff8e6\" style=\"background-color:#fff8e6;border-radius:6px;padding:12px 14px;font-size:14px;line-height:1.5;\"><strong>Tipp:</strong> ',trim(coalesce(outputs('Tipp')?['Tipp'],'')),'</td></tr></table></td></tr>'))"
+                },
+                "Link_Block": {
+                  "runAfter": {
+                    "Tipp_Block": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Compose",
+                  "inputs": "@if(empty(trim(coalesce(outputs('Tipp')?['Link'],''))),'',concat('<tr><td style=\"padding:20px 28px 8px 28px;\"><a href=\"',trim(coalesce(outputs('Tipp')?['Link'],'')),'\" style=\"display:inline-block;background-color:#0f4c5c;color:#ffffff;text-decoration:none;font-size:15px;font-weight:bold;padding:10px 20px;border-radius:6px;\">Jetzt ausprobieren</a></td></tr>'))"
+                },
+                "Feedback_Block": {
+                  "runAfter": {
+                    "Link_Block": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Compose",
+                  "inputs": "@if(empty(trim(coalesce(body('Einstellungen_lesen')?['FeedbackLink'],''))),'',concat('<br>Fragen oder Ideen? <a href=\"',trim(coalesce(body('Einstellungen_lesen')?['FeedbackLink'],'')),'\" style=\"color:#0f4c5c;\">Feedback geben</a>'))"
+                },
+                "Mail_HTML": {
+                  "runAfter": {
+                    "Feedback_Block": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Compose",
+                  "inputs": "<!DOCTYPE html>\n<html lang=\"de\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>@{outputs('Praefix')}</title></head>\n<body style=\"margin:0;padding:0;background-color:#f3f2f1;\">\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" bgcolor=\"#f3f2f1\" style=\"background-color:#f3f2f1;\">\n<tr><td align=\"center\" style=\"padding:24px 12px;\">\n<table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:100%;max-width:600px;background-color:#ffffff;border-radius:8px;font-family:Segoe UI,Arial,sans-serif;color:#242424;\">\n<tr><td bgcolor=\"#0f4c5c\" style=\"background-color:#0f4c5c;padding:18px 28px;border-radius:8px 8px 0 0;\">\n<span style=\"font-size:13px;letter-spacing:1px;text-transform:uppercase;color:#cfe7ec;\">@{outputs('Praefix')} &middot; Tipp @{trim(coalesce(outputs('Tipp')?['Nr'],''))}</span>\n</td></tr>\n<tr><td style=\"padding:24px 28px 8px 28px;\">\n<h1 style=\"margin:0 0 12px 0;font-size:22px;line-height:1.3;color:#0f4c5c;\">@{trim(coalesce(outputs('Tipp')?['Titel'],''))}</h1>\n<span style=\"display:inline-block;padding:3px 10px;margin:0 6px 6px 0;font-size:12px;background-color:#e6f2f4;color:#0f4c5c;border-radius:10px;\">@{trim(coalesce(outputs('Tipp')?['App'],''))}</span><span style=\"display:inline-block;padding:3px 10px;margin:0 6px 6px 0;font-size:12px;background-color:#fff4e0;color:#7a4b00;border-radius:10px;\">@{if(equals(toLower(trim(coalesce(outputs('Tipp')?['Lizenz'],''))),'premium'),'Mit Copilot-Lizenz','Ohne Zusatzlizenz')}</span>\n<p style=\"margin:14px 0 0 0;font-size:15px;line-height:1.55;\">@{trim(coalesce(outputs('Tipp')?['Nutzen'],''))}</p>\n</td></tr>\n@{outputs('Anleitung_Block')}@{outputs('Prompt_Block')}@{outputs('Tipp_Block')}@{outputs('Link_Block')}\n<tr><td style=\"padding:20px 28px 24px 28px;border-top:1px solid #edebe9;font-size:13px;line-height:1.5;color:#605e5c;\">\nCopilot kann Fehler machen. Pr&uuml;fe wichtige Inhalte, bevor du sie weiterverwendest.@{outputs('Feedback_Block')}<br><br>\nViel Spass beim Ausprobieren!<br>@{if(empty(trim(coalesce(body('Einstellungen_lesen')?['Absendername'],''))),'Dein Copilot-Team',trim(coalesce(body('Einstellungen_lesen')?['Absendername'],'')))}\n</td></tr>\n</table>\n</td></tr></table>\n</body></html>"
+                },
+                "Betreff": {
+                  "runAfter": {
+                    "Mail_HTML": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Compose",
+                  "inputs": "@{outputs('Praefix')}: @{trim(coalesce(outputs('Tipp')?['Titel'],''))}"
+                },
+                "Absender_gesetzt": {
+                  "runAfter": {
+                    "Betreff": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "equals": [
+                            "@empty(trim(coalesce(body('Einstellungen_lesen')?['Absender'],'')))",
+                            true
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Mail_senden_als_Absender": {
+                      "runAfter": {},
+                      "type": "OpenApiConnection",
+                      "inputs": {
+                        "parameters": {
+                          "emailMessage/To": "@{trim(coalesce(body('Einstellungen_lesen')?['Empfaenger'],''))}",
+                          "emailMessage/Subject": "@{outputs('Betreff')}",
+                          "emailMessage/Body": "@{outputs('Mail_HTML')}",
+                          "emailMessage/Importance": "Normal",
+                          "emailMessage/From": "@{trim(coalesce(body('Einstellungen_lesen')?['Absender'],''))}"
+                        },
+                        "host": {
+                          "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365",
+                          "connectionName": "shared_office365",
+                          "operationId": "SendEmailV2"
+                        },
+                        "authentication": "@parameters('$authentication')"
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "Mail_senden": {
+                        "runAfter": {},
+                        "type": "OpenApiConnection",
+                        "inputs": {
+                          "parameters": {
+                            "emailMessage/To": "@{trim(coalesce(body('Einstellungen_lesen')?['Empfaenger'],''))}",
+                            "emailMessage/Subject": "@{outputs('Betreff')}",
+                            "emailMessage/Body": "@{outputs('Mail_HTML')}",
+                            "emailMessage/Importance": "Normal"
+                          },
+                          "host": {
+                            "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365",
+                            "connectionName": "shared_office365",
+                            "operationId": "SendEmailV2"
+                          },
+                          "authentication": "@parameters('$authentication')"
+                        }
+                      }
+                    }
+                  }
+                },
+                "Tipp_als_gesendet_markieren": {
+                  "runAfter": {
+                    "Absender_gesetzt": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "OpenApiConnection",
+                  "inputs": {
+                    "parameters": {
+                      "source": "me",
+                      "drive": "",
+                      "file": "",
+                      "table": "tblTipps",
+                      "idColumn": "Nr",
+                      "id": "@{trim(coalesce(outputs('Tipp')?['Nr'],''))}",
+                      "item/Status": "Gesendet",
+                      "item/GesendetAm": "@{formatDateTime(convertFromUtc(utcNow(),'W. Europe Standard Time'),'dd.MM.yyyy')}"
+                    },
+                    "host": {
+                      "apiId": "/providers/Microsoft.PowerApps/apis/shared_excelonlinebusiness",
+                      "connectionName": "shared_excelonlinebusiness",
+                      "operationId": "PatchItem"
+                    },
+                    "authentication": "@parameters('$authentication')"
+                  }
+                }
+              },
+              "else": {
+                "actions": {
+                  "AdminMail_fuer_Ende_vorhanden": {
+                    "runAfter": {},
+                    "type": "If",
+                    "expression": {
+                      "and": [
+                        {
+                          "not": {
+                            "equals": [
+                              "@empty(trim(coalesce(body('Einstellungen_lesen')?['AdminMail'],'')))",
+                              true
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    "actions": {
+                      "Admin_ueber_Ende_informieren": {
+                        "runAfter": {},
+                        "type": "OpenApiConnection",
+                        "inputs": {
+                          "parameters": {
+                            "emailMessage/To": "@{trim(coalesce(body('Einstellungen_lesen')?['AdminMail'],''))}",
+                            "emailMessage/Subject": "Copilot-Znüni: Alle Tipps versendet",
+                            "emailMessage/Body": "<p>Hallo</p><p>Das Copilot-Znüni hat alle passenden Tipps versendet. Der Flow wurde in der Excel-Datei automatisch pausiert (Pausiert = Ja).</p><p>Für eine neue Runde: Status der Tipps wieder auf <b>Offen</b> setzen, neue Tipps ergänzen und Pausiert auf <b>Nein</b> stellen.</p><p>Dein Copilot-Znüni-Flow</p>",
+                            "emailMessage/Importance": "Normal"
+                          },
+                          "host": {
+                            "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365",
+                            "connectionName": "shared_office365",
+                            "operationId": "SendEmailV2"
+                          },
+                          "authentication": "@parameters('$authentication')"
+                        }
+                      }
+                    },
+                    "else": {
+                      "actions": {}
+                    }
+                  },
+                  "Automatisch_pausieren": {
+                    "runAfter": {
+                      "AdminMail_fuer_Ende_vorhanden": [
+                        "Succeeded"
+                      ]
+                    },
+                    "type": "OpenApiConnection",
+                    "inputs": {
+                      "parameters": {
+                        "source": "me",
+                        "drive": "",
+                        "file": "",
+                        "table": "tblEinstellungen",
+                        "idColumn": "Id",
+                        "id": "1",
+                        "item/Pausiert": "Ja"
+                      },
+                      "host": {
+                        "apiId": "/providers/Microsoft.PowerApps/apis/shared_excelonlinebusiness",
+                        "connectionName": "shared_excelonlinebusiness",
+                        "operationId": "PatchItem"
+                      },
+                      "authentication": "@parameters('$authentication')"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "Fehlerbehandlung": {
+          "runAfter": {
+            "Ausfuehren": [
+              "Failed",
+              "TimedOut"
+            ]
+          },
+          "type": "Scope",
+          "actions": {
+            "Fehlgeschlagene_Schritte": {
+              "runAfter": {},
+              "type": "Query",
+              "inputs": {
+                "from": "@result('Ausfuehren')",
+                "where": "@equals(item()?['status'],'Failed')"
+              }
+            },
+            "AdminMail_fuer_Fehler_vorhanden": {
+              "runAfter": {
+                "Fehlgeschlagene_Schritte": [
+                  "Succeeded"
+                ]
+              },
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "not": {
+                      "equals": [
+                        "@empty(trim(coalesce(body('Einstellungen_lesen')?['AdminMail'],'')))",
+                        true
+                      ]
+                    }
+                  }
+                ]
+              },
+              "actions": {
+                "Admin_ueber_Fehler_informieren": {
+                  "runAfter": {},
+                  "type": "OpenApiConnection",
+                  "inputs": {
+                    "parameters": {
+                      "emailMessage/To": "@{trim(coalesce(body('Einstellungen_lesen')?['AdminMail'],''))}",
+                      "emailMessage/Subject": "Copilot-Znüni: Fehler beim Versand",
+                      "emailMessage/Body": "<p>Hallo</p><p>Beim heutigen Lauf des Copilot-Znüni ist ein Fehler aufgetreten. Es wurde möglicherweise kein Tipp versendet.</p><p><b>Betroffener Schritt:</b> @{coalesce(first(body('Fehlgeschlagene_Schritte'))?['name'],'unbekannt')}<br><b>Meldung:</b> @{coalesce(first(body('Fehlgeschlagene_Schritte'))?['error']?['message'],'siehe Verlauf')}</p><p><a href=\"@{concat('https://make.powerautomate.com/environments/',workflow()?['tags']?['environmentName'],'/flows/',workflow()?['name'],'/runs/',workflow()?['run']?['name'])}\">Zum Flow-Verlauf</a></p><p>Dein Copilot-Znüni-Flow</p>",
+                      "emailMessage/Importance": "High"
+                    },
+                    "host": {
+                      "apiId": "/providers/Microsoft.PowerApps/apis/shared_office365",
+                      "connectionName": "shared_office365",
+                      "operationId": "SendEmailV2"
+                    },
+                    "authentication": "@parameters('$authentication')"
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              }
+            },
+            "Lauf_als_fehlgeschlagen_beenden": {
+              "runAfter": {
+                "AdminMail_fuer_Fehler_vorhanden": [
+                  "Succeeded",
+                  "Failed",
+                  "Skipped",
+                  "TimedOut"
+                ]
+              },
+              "type": "Terminate",
+              "inputs": {
+                "runStatus": "Failed",
+                "runError": {
+                  "code": "CopilotZnueniFehler",
+                  "message": "Der Versand ist fehlgeschlagen. Details im Verlauf des Bereichs Ausfuehren."
+                }
+              }
+            }
+          }
+        }
+      },
+      "outputs": {},
+      "description": "Versendet jeden Arbeitstag einen Copilot-Tipp aus einer Excel-Tabelle. https://github.com/rookgmbh/copilotyoga"
+    },
+    "connectionReferences": {
+      "shared_excelonlinebusiness": {
+        "connectionName": "shared-excelonlinebu-00000000-0000-0000-0000-000000000001",
+        "source": "Embedded",
+        "id": "/providers/Microsoft.PowerApps/apis/shared_excelonlinebusiness",
+        "tier": "NotSpecified"
+      },
+      "shared_office365": {
+        "connectionName": "shared-office365-00000000-0000-0000-0000-000000000002",
+        "source": "Embedded",
+        "id": "/providers/Microsoft.PowerApps/apis/shared_office365",
+        "tier": "NotSpecified"
+      }
+    },
+    "flowFailureAlertSubscribed": false,
+    "isManaged": false
+  }
+}
