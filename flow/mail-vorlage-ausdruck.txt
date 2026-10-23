@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>@{outputs('Praefix')}</title></head>
+<body style="margin:0;padding:0;background-color:#f3f2f1;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f3f2f1" style="background-color:#f3f2f1;">
+<tr><td align="center" style="padding:24px 12px;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;background-color:#ffffff;border-radius:8px;font-family:Segoe UI,Arial,sans-serif;color:#242424;">
+<tr><td bgcolor="#0f4c5c" style="background-color:#0f4c5c;padding:18px 28px;border-radius:8px 8px 0 0;">
+<span style="font-size:13px;letter-spacing:1px;text-transform:uppercase;color:#cfe7ec;">@{outputs('Praefix')} &middot; Tipp @{trim(coalesce(outputs('Tipp')?['Nr'],''))}</span>
+</td></tr>
+<tr><td style="padding:24px 28px 8px 28px;">
+<h1 style="margin:0 0 12px 0;font-size:22px;line-height:1.3;color:#0f4c5c;">@{trim(coalesce(outputs('Tipp')?['Titel'],''))}</h1>
+<span style="display:inline-block;padding:3px 10px;margin:0 6px 6px 0;font-size:12px;background-color:#e6f2f4;color:#0f4c5c;border-radius:10px;">@{trim(coalesce(outputs('Tipp')?['App'],''))}</span><span style="display:inline-block;padding:3px 10px;margin:0 6px 6px 0;font-size:12px;background-color:#fff4e0;color:#7a4b00;border-radius:10px;">@{if(equals(toLower(trim(coalesce(outputs('Tipp')?['Lizenz'],''))),'premium'),'Mit Copilot-Lizenz','Ohne Zusatzlizenz')}</span>
+<p style="margin:14px 0 0 0;font-size:15px;line-height:1.55;">@{trim(coalesce(outputs('Tipp')?['Nutzen'],''))}</p>
+</td></tr>
+@{outputs('Anleitung_Block')}@{outputs('Prompt_Block')}@{outputs('Tipp_Block')}@{outputs('Link_Block')}
+<tr><td style="padding:20px 28px 24px 28px;border-top:1px solid #edebe9;font-size:13px;line-height:1.5;color:#605e5c;">
+Copilot kann Fehler machen. Pr&uuml;fe wichtige Inhalte, bevor du sie weiterverwendest.@{outputs('Feedback_Block')}<br><br>
+Viel Spass beim Ausprobieren!<br>@{if(empty(trim(coalesce(body('Einstellungen_lesen')?['Absendername'],''))),'Dein Copilot-Team',trim(coalesce(body('Einstellungen_lesen')?['Absendername'],'')))}
+</td></tr>
+</table>
+</td></tr></table>
+</body></html>
